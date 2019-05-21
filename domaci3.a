@@ -1,0 +1,331 @@
+org 0x00
+		 
+led10 data 34h		  
+led90 data 33h
+ukrasne_diode_on data 36h		 
+ukrasne_diode_off data	35h		     
+brzina data 32h
+trenutno_stanje data 30h
+zapamti data 22h
+signal data 20h
+taster data 21h
+brzina_prekid data 24h
+perioda_prekid data 25h
+sekunda data 26h
+brzina_trenutna data 23h
+
+jmp main
+
+org 0x0B
+jmp prekid
+
+//programi
+
+program1:
+db 01h                 // 0000 0001
+db 02h                 // 0000 0010
+db 04h                 // 0000 0100
+db 08h                 // 0000 1000
+db 10h                 // 0001 0000
+db 20h                 // 0010 0000
+db 40h                 // 0100 0000
+db 80h                 // 1000 0000
+
+program2:
+
+db 80h                 // 1000 0000
+db 40h                 // 0100 0000
+db 20h                 // 0010 0000
+db 10h                 // 0001 0000
+db 08h                 // 0000 1000
+db 04h                 // 0000 0100
+db 02h                 // 0000 0010
+db 01h                 // 0000 0001
+
+program3:
+
+db 0ffh                // 1111 1111
+db 0h                  // 0000 0000
+
+program4:
+
+db 81h                 // 1000 0001
+db 42h                 // 0100 0010
+db 24h                 // 0010 0100
+db 18h                 // 0001 1000
+db 24h                 // 0010 0100
+db 42h                 // 0100 0010
+
+
+izvrsi_p1:
+	jnb signal.1, pomocni_skok	//ukoliko je pritisnut stop, ili nije pokrenut program ne ulazi
+
+	jnb signal.0, pomocni_skok    // 1 oznacava da je proslo 0.5s ili 0.75s
+	clr signal.0
+
+
+	mov A, trenutno_stanje
+	movc A, @A + DPTR
+	mov P2, A
+	
+	inc trenutno_stanje
+	mov A, trenutno_stanje
+
+	mov R0,brzina_trenutna
+	cjne R0,#1,brzina2_p1
+	mov ukrasne_diode_on, #11101010b	// program 1, brzina1
+	jmp nastavak_p1
+
+brzina2_p1:
+	mov ukrasne_diode_on, #11100110b	  //program 2,brzina 2
+
+nastavak_p1:  
+	cjne A, #8, pomocna               //nije stigao do kraja
+
+	mov trenutno_stanje, #0
+	ljmp radi_ne_radi
+
+pomocni_skok:
+	jmp radi_ne_radi
+
+
+izvrsi_p2:
+	jnb signal.1, pomocni_skok	        
+		
+	jnb signal.0, pomocni_skok
+	clr signal.0
+
+	mov A, trenutno_stanje
+	movc A, @A + DPTR
+	mov P2, A
+	
+	inc trenutno_stanje
+	mov A, trenutno_stanje
+
+	mov R0,brzina_trenutna
+	cjne R0,#1,brzina2_p2
+	mov ukrasne_diode_on, #11011010b	// p2 b1
+	jmp nastavak_p2
+
+brzina2_p2:
+    mov ukrasne_diode_on, #11010110b	//p2 b2
+		
+nastavak_p2:  
+	cjne A, #8, pomocni_skok                //nije stigao do kraja
+
+	mov trenutno_stanje, #0
+	ljmp radi_ne_radi
+
+izvrsi_p3:
+	jnb signal.1, pomocni_skok	 
+
+	jnb signal.0, pomocni_skok  
+	clr signal.0
+
+	mov A, trenutno_stanje
+	movc A, @A + DPTR
+	mov P2, A
+	
+	inc trenutno_stanje
+	mov A, trenutno_stanje
+
+	mov R0,brzina_trenutna
+	cjne R0,#1,brzina2_p3	
+	mov ukrasne_diode_on, #10111010b		// p3 b1
+	jmp nastavak_p3
+
+brzina2_p3:
+	mov ukrasne_diode_on, #10110110b				//p3 b2
+
+nastavak_p3:  
+	cjne A, #2, radi_ne_radi  
+
+	mov trenutno_stanje, #0
+	ljmp radi_ne_radi
+
+
+izvrsi_p4:
+	jnb signal.1, radi_ne_radi	
+
+	jnb signal.0, radi_ne_radi   
+	clr signal.0
+
+	mov A, trenutno_stanje
+	movc A, @A + DPTR
+	mov P2, A
+
+	mov R0,brzina_trenutna
+	cjne R0,#1,brzina2_p4
+	mov ukrasne_diode_on, #01111010b //p4 b1
+	jmp nastavak_p4
+
+brzina2_p4:
+	mov ukrasne_diode_on ,#01110110b		//p4 b2
+
+nastavak_p4:  
+	inc trenutno_stanje
+	mov A, trenutno_stanje
+
+	cjne A, #6, radi_ne_radi 
+
+	mov trenutno_stanje, #0
+	ljmp radi_ne_radi
+
+pomocna:
+    jmp radi_ne_radi
+
+
+main:
+ 
+	clr EA			  //ukidanje globalne dozvole prekida
+	mov TL0, #26	  //vrednost za prvo brojanje tajmera 
+	mov	TH0, #26	  //reload vrednost
+	mov TMOD, #2	  //GATE0 = 0(bit3), C/T0 = 0(bit 2), mod2(bit 0- 1)
+	setb TR0		  //dozvola rada tajmera0
+	setb ET0		  //dozvola prekida tajmera0
+	setb EA 		  //globalna dozvola prekida
+	
+   	mov P2, #0		  //inicijalizujemo port P2
+	
+	mov perioda_prekid, #20	      //interapt tajmera 0 generisati 20 puta u toku jedne periode.
+	
+	mov brzina_prekid, #100			// init 0.5
+	mov brzina, #100			    // init 0.5
+	mov brzina_trenutna,#1		    // init
+	  
+	//10% od 20 je 2 , a 90% od 20 je 18
+
+	mov led10, #2
+	mov led90, #18
+	mov ukrasne_diode_on, #0FDH
+	mov ukrasne_diode_off, #0FFH
+    
+	//brojac jedne sekunde x*5ms = 1000ms -> x = 200
+	mov sekunda, #10 	
+	  
+	mov R2, #1 
+	mov DPTR, #program1
+	mov trenutno_stanje, #0
+
+//provera_tastera:
+
+radi_ne_radi:	
+	jnb taster.0, start
+	jnb taster.1, stop
+		
+brzine:
+	jnb taster.2, brzina1
+	jnb taster.3, brzina2
+
+program:
+	jnb taster.4, stanje_program1
+	jnb taster.5, stanje_program2
+	jnb taster.6, stanje_program3
+	jnb taster.7, stanje_program4	
+	;jnb signal.1, radi_ne_radi 
+	ljmp izvrsi_ponovo_provera
+
+brzina1:		                              //x*5ms=500ms => x=100
+	mov brzina, #100
+	mov brzina_trenutna,#1
+	mov brzina_prekid, brzina
+	ljmp radi_ne_radi
+
+pomocni_skok_2:
+	jmp stop
+
+brzina2:	                                   // x*5ms=750ms => x=150
+	mov brzina, #150
+	mov brzina_trenutna,#2				   
+	mov brzina_prekid, brzina
+	ljmp radi_ne_radi	
+	
+//pamtimo program koji smo izabrali
+
+stanje_program1:
+	mov R2, #1 
+	mov DPTR, #program1
+	mov trenutno_stanje, #0
+	jmp izvrsi_p1
+
+stanje_program2:
+	mov R2, #2
+	mov DPTR, #program2
+	mov trenutno_stanje, #0
+	ljmp izvrsi_p2
+
+stanje_program3:
+	mov R2, #3
+	mov DPTR, #program3
+	mov trenutno_stanje, #0
+	ljmp izvrsi_p3
+
+stanje_program4:
+	mov R2, #4d
+	mov DPTR, #program4
+	mov trenutno_stanje, #0
+	ljmp izvrsi_p4
+	
+//proveravamo koji program se zadnji izvrsavao
+				
+izvrsi_ponovo_provera:
+	cjne R2, #1 , proveri_drugi
+	jmp izvrsi_p1
+
+proveri_drugi:
+	cjne R2, #2 , proveri_treci
+	jmp izvrsi_p2
+
+ proveri_treci:
+	cjne R2, #3 , proveri_cetvrti
+	jmp izvrsi_p3
+
+proveri_cetvrti:
+	cjne R2, #4 , program
+	jmp izvrsi_p4
+					
+start:
+	setb signal.1
+	setb taster.0
+	ljmp radi_ne_radi
+
+stop:
+	clr signal.1
+	mov P2, #0
+	mov ukrasne_diode_on, #11111101b
+	ljmp radi_ne_radi
+	
+  jmp izvrsi_ponovo_provera
+
+prekid:	                         
+	djnz led10, osvetljenje		        //djnz skace ako je 1 	 
+	mov A, ukrasne_diode_on
+	mov P0, A	
+
+osvetljenje:						 
+	djnz led90, broj_perioda
+	mov A, ukrasne_diode_off
+	mov P0, A
+
+broj_perioda:					
+	djnz perioda_prekid, kraji
+	mov perioda_prekid, #20
+	mov taster, P0
+	mov A, #0
+	mov P0, A
+	mov led10, #2
+	mov led90, #18
+
+	djnz brzina_prekid, prosla_je_sekunda
+	mov brzina_prekid, brzina
+		
+	setb signal.0		//proslo 0.5s ili 0.75s, moze da se predje na sledece stanje dioda u programu	
+
+prosla_je_sekunda:
+	djnz sekunda, kraji	
+	mov sekunda, #200
+			
+kraji:		
+reti						
+
+end															 
